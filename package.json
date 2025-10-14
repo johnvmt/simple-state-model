@@ -1,0 +1,23 @@
+{
+  "name": "simple-state-model",
+  "version": "0.0.1",
+  "description": "Simple state-management with patching and syncing",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnvmt/simple-state-model.git"
+  },
+  "private": false,
+  "type": "module",
+  "main": "src/exports.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "object-path-utilities": "^1.0.2",
+    "rfc6902": "^5.1.2",
+    "simple-utility-event-emitter": "^1.0.0"
+  },
+  "devDependencies": {
+    "simple-utility-logger": "^1.0.1"
+  }
+}
