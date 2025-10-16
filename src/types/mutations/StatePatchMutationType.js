@@ -1,53 +1,44 @@
-// StatePatchMutationType v1.0.0
+// StatePatchMutationType v1.0.0 - Simplified patch mutation
 import StateMutationType from "../StateMutationType.js";
-import patchStateData from "../../mutators/patchStateData.js";
+import { applyPatch } from "../../utils/ObjectPatcher.js";
 
 class StatePatchMutationType extends StateMutationType {
-    constructor(patch, state, options = {}) {
-        super(state, options);
+    constructor(patch, options = {}) {
+        super(options);
+
+        // validate patch
+        if (!Array.isArray(patch))
+            throw new Error("Patch must be an array of operations");
+
         this._patch = patch;
     }
 
+    /**
+     * Get the patch operations
+     * @returns {Array} The patch operations
+     */
     get patch() {
         return this._patch;
     }
 
     /**
-     * Apply a patch mutation to data
-     * @param data
-     * @param options
+     * Apply patch mutation to value, returning the new value
+     * @param {*} value - The value to patch
+     * @param {Object} options - Patching options
+     * @returns {*} The new patched value
      */
-    applyData(data, options = {}) {
-        const result = patchStateData(data, this.patch, options);
-
-        // Don't emit patch here - let the queue handle emission after status is set
-
-        return result;
-    }
-
-    /**
-     * Save patch to store
-     * Accept or reject on result
-     * @returns {Promise<void>}
-     */
-    async save() {
-        await super.save();
-
-        try {
-            await this.state.store.patch(
-                this.state.id,
-                this._patch,
-                {
-                    tag: this.tag,
-                    source: this.source
-                }
-            );
-
-            this.accept();
-        } catch (error) {
-            this._log('error', 'Failed to save patch mutation:', error.message);
-            this.reject({ error });
-        }
+    apply(value, options = {}) {
+        return applyPatch(
+            value,
+            this._patch,
+            {
+                nest: true, // re-map to allow mutations on root element
+                immutable: true, // clone and apply to cloned object
+                create: true, // create structure if needed (ie: allows setting nested value whose parent object does not exist)
+                ...this.options,
+                ...options
+            }
+        );
     }
 }
 

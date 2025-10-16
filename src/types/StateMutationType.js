@@ -1,68 +1,22 @@
-// StateMutationType v1.0.0 - Simplified authoritative patch handling
-import SimpleEventEmitter from "simple-utility-event-emitter";
+// StateMutationType v1.0.0 - Simplified mutation base class
+import { BaseEventEmitterController } from "utility-base-controllers";
+import NotImplementedError from "../utils/errors/NotImplementedError.js";
+import { uniqueID as generateUniqueID } from "../utils/uniqueID.js";
 
-class StateMutationTypeError extends Error {
-    constructor(message, props = {}) {
-        super(message);
-
-        const mergedProps = {
-            mutated: true,
-            ...props
-        }
-
-        Object.assign(this, mergedProps);
-    }
-}
-
-class StateMutationType extends SimpleEventEmitter{
-    constructor(state, options = {}) {
-        super();
-        this._state = state;
-        this._options = {
-            save: true,
-            logger: console, // default logger
-            authoritative: false, // patch-level: true = immediately accepted/rejected, false = provisional
+class StateMutationType extends BaseEventEmitterController {
+    constructor(options = {}) {
+        super({
+            tag: generateUniqueID(),
             ...options
-        };
-        this._dependentMutations = new Set();
+        });
 
-        // Determine initial status based on authoritative flag
-        const defaultStatus = this._options.authoritative
-            ? StateMutationType.STATUSES.IDLE
-            : StateMutationType.STATUSES.PROVISIONAL;
-
-        this._setStatus(this._options.status ?? defaultStatus);
-
-        // add tag if tag is not specified
-        if(!this._options.tag)
-            this._options.tag = StateMutationType.uniqueID();
+        // All mutations start as PROVISIONAL by default
+        // The queue will decide whether to accept/reject based on the state's mode
+        this._setStatus(this.options.status ?? StateMutationType.STATUSES.PROVISIONAL);
     }
 
-    /**
-     * Returns object of merged options
-     * @returns {*|{save: boolean}}
-     */
-    get options() {
-        return this._options;
-    }
-
-    /**
-     * Return data object from passed data object or state
-     * @returns {*}
-     */
-    get data() {
-        if('data' in this.options)
-            return this.options.data;
-        else if('state' in this.options)
-            return this.options.state.data;
-    }
-
-    /**
-     * Return the state this applies to
-     * @returns {*}
-     */
-    get state() {
-        return this._state;
+    get tag() {
+        return this.options.tag;
     }
 
     get status() {
@@ -73,193 +27,51 @@ class StateMutationType extends SimpleEventEmitter{
         return StateMutationType.closedStatus(this.status);
     }
 
-    /**
-     * Returns rejection error, if one is set
-     * @returns {*}
-     */
     get error() {
         return this._error;
     }
 
     /**
-     * Returns the source ID (allows client to not receive mutations it sent)
-     * @returns {*}
-     */
-    get source() {
-        return this._options.source;
-    }
-
-    /**
-     * Returns the mutation tag (allows tracking through the server)
-     * @returns {*}
-     */
-    get tag() {
-        return this._options.tag;
-    }
-
-    /**
-     * Returns whether this patch is authoritative (immediately accepted/rejected)
-     * @returns {boolean}
-     */
-    get authoritative() {
-        return this._options.authoritative || false;
-    }
-
-    /**
-     * Accept the change and close out the mutation
+     * Accept the mutation and close it
      */
     accept(options = {}) {
         if(this.closed)
             throw new Error("Mutation is already closed");
-
         this._setStatus(StateMutationType.STATUSES.ACCEPTED);
     }
 
     /**
-     * Reject the change and close out the mutation
-     * @param options
+     * Reject the mutation and close it
      */
     reject(options = {}) {
         if(this.closed)
             throw new Error("Mutation is already closed");
 
-        const mergedOptions = {
-            dependency: false,
-            ...options
-        };
+        if (options.error)
+            this._error = options.error;
 
-        if(mergedOptions.error)
-            this._error = mergedOptions.error;
-
-        // reject all dependent mutations
-        for(let dependentMutation of this._dependentMutations) {
-            dependentMutation.reject({
-                ...mergedOptions,
-                dependency: true
-            });
-        }
-
-        this._setStatus(StateMutationType.STATUSES.REJECTED, mergedOptions);
+        this._setStatus(StateMutationType.STATUSES.REJECTED, options);
     }
 
     /**
-     * Apply the mutation to a data object (passed here, or in the constructor)
-     * Also saves the data, if not previously saved
-     * @param options
-     * @returns {*}
+     * Apply the mutation to a value - override in subclasses
+     * @param {*} value - The value to apply the mutation to
+     * @param {Object} options - Application options
+     * @returns {*} The new modified value
      */
-    apply(options = {}) {
-        const mergedOptions = {
-            ...options
-        };
-
-        const data = mergedOptions.data ?? this.data;
-
-        if(!data)
-            throw new Error("No target data available")
-
-        if(this.options.conditions)
-            data.validateConditions(this.options.conditions);
-
-        try {
-            this.applyData(data, options);
-
-            // If this patch is authoritative, successful application means acceptance
-            if (this.authoritative && this.status === StateMutationType.STATUSES.IDLE) {
-                this.accept();
-            }
-
-            // If this patch is authoritative but was provisional, accept it now
-            if (this.authoritative && this.status === StateMutationType.STATUSES.PROVISIONAL) {
-                this.accept();
-            }
-        } catch (error) {
-            // If authoritative patch fails, immediately reject
-            if (this.authoritative) {
-                this._options.logger.error('Authoritative patch failed to apply:', error.message);
-                this.reject({ error });
-                throw error;
-            }
-
-            throw error;
-        }
-
-        const save = ('save' in mergedOptions)
-            ? mergedOptions.save
-            : this.options.save;
-
-        if(save)
-            this.saveOnce()
+    apply(value, options = {}) {
+        throw new NotImplementedError("apply method must be implemented by subclass");
     }
 
     /**
-     * Placeholder for child mutation types to override
-     * @param data
-     * @param options
-     */
-    applyData(data, options = {}) {
-        throw new Error("Not implemented");
-    }
-
-    /**
-     * Returns true if save has started (or finished, or failed), false otherwise
-     * @returns {boolean}
-     */
-    get saveRequested() {
-        return this._saveRequested ?? false;
-    }
-
-    async saveOnce() {
-        if(!this.closed && !this.saveRequested && this.state.store)
-            await this.save();
-    }
-
-    async save() {
-        if(this.saveRequested)
-            throw new Error("Already saved");
-
-        if(!this.state.store)
-            throw new Error("No store to save");
-
-        this._saveRequested = true;
-    }
-
-    /**
-     * Add a dependent mutation that will be rejected if this one is rejected
-     * @param mutation
-     */
-    addDependentMutation(mutation) {
-        if(this.status === StateMutationType.STATUSES.REJECTED)
-            throw new Error("Mutation already rejected");
-
-        this._dependentMutations.add(mutation);
-    }
-
-    /**
-     * Log a message using the configured logger
-     * @param {string} level - Log level (info, warn, error, debug)
-     * @param {...any} messageParts - Message parts to log
-     * @private
-     */
-    _log(level, ...messageParts) {
-        if (this._options.logger && typeof this._options.logger[level] === 'function') {
-            this._options.logger[level](...messageParts);
-        }
-    }
-
-    /**
-     * Validate, set and emit status
-     * @param status
-     * @param emitOptions
-     * @private
+     * Set status and emit events
      */
     _setStatus(status, emitOptions = {}) {
-        if(!(status in StateMutationType.STATUSES))
+        if (!(status in StateMutationType.STATUSES))
             throw new Error("Invalid status");
 
-        if(status !== this._status) {
+        if (status !== this._status) {
             this._status = status;
-
             this.emit("status", this._status);
 
             if(StateMutationType.closedStatus(this._status))
@@ -268,34 +80,21 @@ class StateMutationType extends SimpleEventEmitter{
     }
 
     /**
-     * Returns true if the passed status is a final type (ACCEPTED or REJECTED)
-     * @param status
-     * @returns {boolean}
+     * Check if status is final (accepted or rejected)
      */
     static closedStatus(status) {
         return (
-            status === StateMutationType.STATUSES.ACCEPTED
-            || status === StateMutationType.STATUSES.REJECTED
+            status === StateMutationType.STATUSES.ACCEPTED ||
+            status === StateMutationType.STATUSES.REJECTED
         );
     }
 
-    static uniqueID() {
-        function s4() {
-            return Math.floor((1 + Math.random()) * 0x10000)
-                .toString(16)
-                .substring(1);
-        }
-        return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
-            s4() + '-' + s4() + s4() + s4();
-    }
-
     static STATUSES = {
-        IDLE: "IDLE", // not yet applied
-        PROVISIONAL: "PROVISIONAL", // applied provisionally (default for non-authoritative patches)
-        ACCEPTED: "ACCEPTED", // applied and accepted
-        REJECTED: "REJECTED" // rejected
+        IDLE: "IDLE",           // not yet applied
+        PROVISIONAL: "PROVISIONAL", // applied provisionally
+        ACCEPTED: "ACCEPTED",   // applied and accepted
+        REJECTED: "REJECTED"    // rejected
     }
 }
 
 export default StateMutationType;
-export {StateMutationType, StateMutationTypeError};

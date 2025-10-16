@@ -1,6 +1,6 @@
 {
   "name": "simple-state-model",
-  "version": "0.0.1",
+  "version": "0.0.3-alpha1",
   "description": "Simple state-management with patching and syncing",
   "repository": {
     "type": "git",
@@ -13,9 +13,9 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "object-path-utilities": "^1.0.2",
+    "object-path-utilities": "^1.0.3",
     "rfc6902": "^5.1.2",
-    "simple-utility-event-emitter": "^1.0.0"
+    "utility-base-controllers": "^1.0.1"
   },
   "devDependencies": {
     "simple-utility-logger": "^1.0.1"

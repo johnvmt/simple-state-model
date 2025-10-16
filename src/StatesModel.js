@@ -1,70 +1,52 @@
 // StatesModel v1.0.0
-import StateType from "./types/StateType.js";
+import InMemoryStateAdapter from "./adapters/InMemoryStateAdapter.js";
+import { BaseEventEmitterController } from "utility-base-controllers";
 
-class StatesModel {
+class StatesModel extends BaseEventEmitterController {
     constructor(options = {}) {
-        this._options = {
-            logger: console, // default logger
+        super({
+            // default adapter: in-memory adapter
+            adapter: new InMemoryStateAdapter({
+                logger: options.logger
+            }),
             ...options
-        };
-        this._statesByID = new Map();
+        });
     }
 
     /**
-     * Get or create a state by ID
-     * @param {string} id - State identifier
-     * @returns {StateType} - State instance
+     * Returns the configured adapter
+     * @returns {*}
      */
-    get(id) {
-        if(!this._statesByID.has(id)) {
-            this._statesByID.set(id, new StateType({
-                ...this._options,
-                id: id
-            }));
-        }
-
-        return this._statesByID.get(id);
+    get adapter() {
+        return this.options.adapter;
     }
 
     /**
-     * Check if a state exists
+     * Get a StateType instance by ID - delegates to adapter
      * @param {string} id - State identifier
-     * @returns {boolean}
+     * @param {Object} options - StateType options
+     * @returns {Promise<StateType>} - StateType instance managed by adapter
+     */
+    get(id, options = {}) {
+        return this.adapter.get(id, options);
+    }
+
+    /**
+     * Check if data exists in adapter (async)
+     * @param {string} id - State identifier
+     * @returns {Promise<boolean>} - True if data exists
      */
     has(id) {
-        return this._statesByID.has(id);
+        return this.adapter.has(id);
     }
 
     /**
-     * Remove a state by ID
+     * Remove a state by ID from adapter
      * @param {string} id - State identifier
-     * @returns {boolean} - True if state was removed, false if it didn't exist
+     * @returns {Promise<boolean>} - True if state was removed
      */
-    remove(id) {
-        const state = this._statesByID.get(id);
-        if (state) {
-            state.destroy?.();
-            return this._statesByID.delete(id);
-        }
-        return false;
-    }
-
-    /**
-     * Get all state IDs
-     * @returns {string[]} - Array of state IDs
-     */
-    getStateIds() {
-        return Array.from(this._statesByID.keys());
-    }
-
-    /**
-     * Clear all states
-     */
-    clear() {
-        for (const state of this._statesByID.values()) {
-            state.destroy?.();
-        }
-        this._statesByID.clear();
+    delete(id) {
+        return this.adapter.delete(id);
     }
 }
 
