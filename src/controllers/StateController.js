@@ -1,33 +1,30 @@
-// StateType v1.0.0
-import { BaseEventEmitterController } from "utility-base-controllers";
+// StateController v1.0.0
+import ConfigController from "./ConfigController.js";
+import StateControllerMutationQueue from "./mutations/StateControllerMutationQueue.js";
+import StateControllerPatchMutation from "./mutations/StateControllerPatchMutation.js";
 
-// types
-import StateMutationQueueType from "./StateMutationQueueType.js";
-import StatePatchMutationType from "./mutations/StatePatchMutationType.js";
-
-class StateType extends BaseEventEmitterController {
+class StateController extends ConfigController {
     constructor(options = {}) {
         super(options);
 
         // Determine the mode for patch handling (AUTHORITATIVE = immediately applied, CLIENT = provisional)
-        this._mode = options.mode || StateType.MODES.AUTHORITATIVE;
+        this._mode = options.mode || StateController.MODES.AUTHORITATIVE;
 
-        this._mutationQueue = new StateMutationQueueType({
+        this._mutationQueue = new StateControllerMutationQueue({
             logger: this.options.logger,
             value: this.options.value // initial value
         });
 
         // when running in authoritative mode, immediately apply mutations added to the queue
-        if(this.options.mode === StateType.MODES.AUTHORITATIVE) {
+        if(this.mode === StateController.MODES.AUTHORITATIVE) {
             this._mutationQueue.on('mutation-added', (mutation) => {
-                this.log("debug", `Mutation added to queue: ${mutation.key}`);
+                console.log(mutation);
+                this.log("debug", `Accepting mutation added to queue: ${mutation.key}`);
                 mutation.accept();
             });
         }
 
         this._mutationQueue.on('provisionalValue', (provisionalValue, options) => {
-            console.log("PVAL", provisionalValue)
-
             const patchEmitOptions = {
                 new: provisionalValue,
                 ...options?.mutation?.options,
@@ -37,7 +34,7 @@ class StateType extends BaseEventEmitterController {
             if(options?.mutation?.patch) // patch is included in mutation
                 this.emit('patch', options.mutation.patch, patchEmitOptions);
             else // generate a patch
-                this.emit('patch', StateType.patchFromValue(provisionalValue), patchEmitOptions);
+                this.emit('patch', StateController.patchFromValue(provisionalValue), patchEmitOptions);
 
             this.emit('value', provisionalValue, options);
         });
@@ -47,9 +44,11 @@ class StateType extends BaseEventEmitterController {
      * Apply a patch to the state
      * @param {Array} patch - RFC6902 JSON patch operations
      * @param {Object} options - Patch options
-     * @returns {StatePatchMutationType} The created mutation
+     * @returns {StateControllerPatchMutation} The created mutation
      */
     patch(patch, options = {}) {
+        this.validateNotDestroyed()
+
         const mergedOptions = {
             logger: this.options.logger,
             ...options
@@ -57,7 +56,7 @@ class StateType extends BaseEventEmitterController {
 
         this.log("debug", "Applying patch to state:", patch);
 
-        const mutation = new StatePatchMutationType(patch, mergedOptions);
+        const mutation = new StateControllerPatchMutation(patch, mergedOptions);
         this._mutationQueue.add(mutation);
 
         this.log("debug", "Patch mutation created and added to queue:", mutation.tag);
@@ -70,7 +69,6 @@ class StateType extends BaseEventEmitterController {
      * @returns {*}
      */
     get value() {
-        console.log("GET VALU")
         return this._mutationQueue.provisionalValue;
     }
 
@@ -89,7 +87,7 @@ class StateType extends BaseEventEmitterController {
      */
     setValue(value, options = {}) {
         return this.patch(
-            StateType.patchFromValue(value),
+            StateController.patchFromValue(value),
             options
         );
     }
@@ -107,46 +105,10 @@ class StateType extends BaseEventEmitterController {
      * @param {string} mode - MODE value (AUTHORITATIVE or CLIENT)
      */
     set mode(mode) {
-        if(!(mode in StateType.MODES))
-            throw new Error(`Invalid mode: ${mode}. Must be one of: ${Object.values(StateType.MODES).join(', ')}`);
+        if(!(mode in StateController.MODES))
+            throw new Error(`Invalid mode: ${mode}. Must be one of: ${Object.values(StateController.MODES).join(', ')}`);
 
         this._mode = mode;
-    }
-
-    /**
-     * Returns state status (OK, LOADING, ERROR)
-     * @returns {string}
-     */
-    get status() {
-        return this._status;
-    }
-
-    /**
-     * Set state status with default options
-     * @param status
-     */
-    set status(status) {
-        this.setStatus(status);
-    }
-
-    /**
-     * Set state status with custom options
-     * @param status
-     * @param options
-     */
-    setStatus(status, options = {}) {
-        const mergedOptions = {
-            emit: true,
-            ...options
-        };
-
-        if(status !== this._status) {
-            this._status = status;
-
-            if(mergedOptions.emit) {
-                this.emit("status", this._status);
-            }
-        }
     }
 
     /**
@@ -162,7 +124,7 @@ class StateType extends BaseEventEmitterController {
         if(this._mutationQueue)
             this._mutationQueue.empty();
 
-        this.status = StateType.STATUSES.OK;
+        this.status = StateController.STATUSES.OK;
 
         if(mergedOptions.emit) {
             this.emit("value", this.value);
@@ -170,28 +132,20 @@ class StateType extends BaseEventEmitterController {
         }
     }
 
-    /**
-     * Clean up resources
-     */
-    destroy(reason = undefined) {
-        this.emit('destroy', reason);
-        super.destroy();
-    }
-
     static patchFromValue(value) {
-        return [{ op: 'replace', path: '', value: value }];
+        return [
+            {
+                op: 'replace',
+                path: '',
+                value: value
+            }
+        ];
     }
 
     static MODES = {
         AUTHORITATIVE: "AUTHORITATIVE", // patches applied immediately
         CLIENT: "CLIENT" // patches default applied as provisional
     }
-
-    static STATUSES = {
-        OK: "OK",
-        LOADING: "LOADING",
-        ERROR: "ERROR"
-    }
 }
 
-export default StateType;
+export default StateController;

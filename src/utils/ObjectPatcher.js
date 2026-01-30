@@ -49,7 +49,7 @@ const applyPatch = (document, patch, options = {}) => {
 
     // if immutable, clone the source before modifying the clone in-place
     const patchDocument = mergedOptions.immutable
-        ? objectClone(document)
+        ? objectClone(document ?? {})
         : document;
 
     if(mergedOptions.create) {

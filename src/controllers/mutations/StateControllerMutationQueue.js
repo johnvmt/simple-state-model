@@ -1,10 +1,10 @@
-// StateMutationQueueType v1.0.0 - Simplified mutation processing
+// StateControllerMutationQueue v1.0.0 - Simplified mutation processing
 import { BaseEventEmitterController } from "utility-base-controllers";
-import MapLinkedList from "../utils/MapLinkedList/MapLinkedList.js";
-import StateMutationType from "./StateMutationType.js";
+import MapLinkedList from "../../utils/MapLinkedList/MapLinkedList.js";
+import StateControllerMutation from "./StateControllerMutation.js";
 import { objectDeepEqual } from "object-path-utilities";
 
-class StateMutationQueueType extends BaseEventEmitterController {
+class StateControllerMutationQueue extends BaseEventEmitterController {
     constructor(options = {}) {
         super({
             ordered: false, // ordered mode processing - see comments below
@@ -14,7 +14,7 @@ class StateMutationQueueType extends BaseEventEmitterController {
         this._provisionalValue = options.value ?? {}; // set initial provisional value
         this._acceptedValue = this._provisionalValue; // set initial accepted value from provisional value
         this._mutationsByTag = new MapLinkedList();
-        this._status = options.status ?? StateMutationQueueType.STATUSES.OK;
+        this._status = options.status ?? StateControllerMutationQueue.STATUSES.OK;
     }
 
     /**
@@ -32,7 +32,7 @@ class StateMutationQueueType extends BaseEventEmitterController {
     set status(newStatus) {
         if(newStatus !== this._status) {
             this._status = newStatus;
-            if(this._status === StateMutationQueueType.STATUSES.OK)
+            if(this._status === StateControllerMutationQueue.STATUSES.OK)
                 delete this._error;
 
             this.emit('status', this._status);
@@ -134,12 +134,12 @@ class StateMutationQueueType extends BaseEventEmitterController {
 
                 // Listen for status changes
                 mutation.once("close", (status) => {
-                    if (status === StateMutationType.STATUSES.REJECTED) { // rejecting a mutation that was already in the queue
+                    if (status === StateControllerMutation.STATUSES.REJECTED) { // rejecting a mutation that was already in the queue
                         // TODO handle multiple simultaneous closures
                         this._mutationsByTag.remove(mutation.tag);
                         this._recalculateProvisionalValue({ mutation: mutation});
                     }
-                    else if(status === StateMutationType.STATUSES.ACCEPTED) {
+                    else if(status === StateControllerMutation.STATUSES.ACCEPTED) {
                         this._recalculateAcceptedValue({ mutation: mutation});
                     }
                 });
@@ -147,7 +147,7 @@ class StateMutationQueueType extends BaseEventEmitterController {
 
                 this.setProvisionalValue(mutatedProvisionalValue, {
                     mutation: mutation,
-                    trigger: StateMutationQueueType.MUTATIONTRIGGERS.MUTATION
+                    trigger: StateControllerMutationQueue.MUTATIONTRIGGERS.MUTATION
                 });
 
                 this.emit('mutation-added', mutation);
@@ -204,7 +204,7 @@ class StateMutationQueueType extends BaseEventEmitterController {
         }
 
         this.setProvisionalValue(mutatedProvisionalValue, {
-            trigger: StateMutationQueueType.MUTATIONTRIGGERS.RECALCULATE
+            trigger: StateControllerMutationQueue.MUTATIONTRIGGERS.RECALCULATE
         }); // TODO add a reason
     }
 
@@ -218,7 +218,7 @@ class StateMutationQueueType extends BaseEventEmitterController {
 
         // Find all accepted mutations and apply them to accepted value
         for (let mutation of this._mutationsByTag.values) {
-            if (mutation.status === StateMutationType.STATUSES.ACCEPTED) {
+            if (mutation.status === StateControllerMutation.STATUSES.ACCEPTED) {
                 try {
                     mutatedAcceptedValue = mutation.apply(mutatedAcceptedValue);
                 }
@@ -231,14 +231,14 @@ class StateMutationQueueType extends BaseEventEmitterController {
         // Remove processed accepted mutations from queue
         const mutationsToRemove = [];
         for (let [mutationTag, mutation] of this._mutationsByTag.entries) {
-            if (mutation.status === StateMutationType.STATUSES.ACCEPTED) {
+            if (mutation.status === StateControllerMutation.STATUSES.ACCEPTED) {
                 mutationsToRemove.push(mutationTag);
             }
         }
         mutationsToRemove.forEach(mutationTag => this._mutationsByTag.remove(mutationTag));
 
         this.setAcceptedValue(mutatedAcceptedValue, {
-            trigger: StateMutationQueueType.MUTATIONTRIGGERS.RECALCULATE
+            trigger: StateControllerMutationQueue.MUTATIONTRIGGERS.RECALCULATE
         })
     }
 
@@ -246,16 +246,16 @@ class StateMutationQueueType extends BaseEventEmitterController {
      * Handle adding mutation when tag already exists
      */
     _updateMutationInQueue(newMutation) {
-        const existing = this._mutationsByTag.get(newMutation.tag);
+        const existing = this._mutationsByTag.value(newMutation.tag);
 
         // If same content, handle status transitions
         if(this._samePatch(existing.patch, newMutation.patch)) {
-            if (existing.status === StateMutationType.STATUSES.PROVISIONAL) {
-                if (newMutation.status === StateMutationType.STATUSES.ACCEPTED) {
+            if (existing.status === StateControllerMutation.STATUSES.PROVISIONAL) {
+                if (newMutation.status === StateControllerMutation.STATUSES.ACCEPTED) {
                     existing.accept();
                     return;
                 }
-                else if (newMutation.status === StateMutationType.STATUSES.REJECTED) {
+                else if (newMutation.status === StateControllerMutation.STATUSES.REJECTED) {
                     existing.reject();
                     return;
                 }
@@ -307,4 +307,4 @@ class StateMutationQueueType extends BaseEventEmitterController {
     }
 }
 
-export default StateMutationQueueType;
+export default StateControllerMutationQueue;

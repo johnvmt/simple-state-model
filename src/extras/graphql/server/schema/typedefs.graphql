@@ -1,0 +1,63 @@
+scalar JSON
+scalar ObjectOrPrimitive
+
+type State {
+    id: ID!
+    value: JSON
+    subscribers(options: StateSubscribersOptionsInput): StateSubscribers
+}
+
+type StateSubscribers {
+    count: Int!
+    results: [StateSubscriber!]
+}
+
+type StateInfo {
+    subscribers: StateSubscribers
+}
+
+type StateSubscriber {
+    id: ID!
+    name: String
+    anonymous: Boolean!
+}
+
+type StateMutation {
+    state: State
+    reset: Boolean!
+    patch: JSON
+    source: ID
+    tag: ID
+}
+
+input StateSubscriberInput {
+    name: String
+}
+
+input StateMutationSubscriptionOptionsInput {
+    exclude_source: ID
+    subscriber: StateSubscriberInput
+}
+
+input StateSubscribersOptionsInput {
+    exclude_anonymous: Boolean
+}
+
+input StateMutationOptionsInput {
+    source: ID
+    tag: ID
+}
+
+type Query {
+    state(provider: ID, id: ID!): State
+    state_subscribers(provider: ID, id: ID!, options: StateSubscribersOptionsInput): StateSubscribers
+}
+
+type Mutation {
+    state_patch(provider: ID, id: ID!, patch: JSON!, options: StateMutationOptionsInput): StateMutation
+}
+
+type Subscription {
+    state_mutation(provider: ID, id: ID!, options: StateMutationSubscriptionOptionsInput): StateMutation
+    state_subscribers(provider: ID, id: ID!, options: StateSubscribersOptionsInput): StateSubscribers
+}

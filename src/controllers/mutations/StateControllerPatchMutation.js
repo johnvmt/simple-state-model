@@ -1,8 +1,8 @@
-// StatePatchMutationType v1.0.0 - Simplified patch mutation
-import StateMutationType from "../StateMutationType.js";
+// StateControllerPatchMutation v1.0.0 - Simplified patch mutation
+import StateControllerMutation from "./StateControllerMutation.js";
 import { applyPatch } from "../../utils/ObjectPatcher.js";
 
-class StatePatchMutationType extends StateMutationType {
+class StateControllerPatchMutation extends StateControllerMutation {
     constructor(patch, options = {}) {
         super(options);
 
@@ -42,4 +42,4 @@ class StatePatchMutationType extends StateMutationType {
     }
 }
 
-export default StatePatchMutationType;
+export default StateControllerPatchMutation;

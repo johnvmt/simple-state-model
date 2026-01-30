@@ -1,9 +1,9 @@
-// StateMutationType v1.0.0 - Simplified mutation base class
+// StateControllerMutation v1.0.0 - Simplified mutation base class
 import { BaseEventEmitterController } from "utility-base-controllers";
-import NotImplementedError from "../utils/errors/NotImplementedError.js";
-import { uniqueID as generateUniqueID } from "../utils/uniqueID.js";
+import NotImplementedError from "../../utils/errors/NotImplementedError.js";
+import { uniqueID as generateUniqueID } from "../../utils/uniqueID.js";
 
-class StateMutationType extends BaseEventEmitterController {
+class StateControllerMutation extends BaseEventEmitterController {
     constructor(options = {}) {
         super({
             tag: generateUniqueID(),
@@ -12,7 +12,7 @@ class StateMutationType extends BaseEventEmitterController {
 
         // All mutations start as PROVISIONAL by default
         // The queue will decide whether to accept/reject based on the state's mode
-        this._setStatus(this.options.status ?? StateMutationType.STATUSES.PROVISIONAL);
+        this._setStatus(this.options.status ?? StateControllerMutation.STATUSES.PROVISIONAL);
     }
 
     get tag() {
@@ -24,7 +24,7 @@ class StateMutationType extends BaseEventEmitterController {
     }
 
     get closed() {
-        return StateMutationType.closedStatus(this.status);
+        return StateControllerMutation.closedStatus(this.status);
     }
 
     get error() {
@@ -37,7 +37,7 @@ class StateMutationType extends BaseEventEmitterController {
     accept(options = {}) {
         if(this.closed)
             throw new Error("Mutation is already closed");
-        this._setStatus(StateMutationType.STATUSES.ACCEPTED);
+        this._setStatus(StateControllerMutation.STATUSES.ACCEPTED);
     }
 
     /**
@@ -50,7 +50,7 @@ class StateMutationType extends BaseEventEmitterController {
         if (options.error)
             this._error = options.error;
 
-        this._setStatus(StateMutationType.STATUSES.REJECTED, options);
+        this._setStatus(StateControllerMutation.STATUSES.REJECTED, options);
     }
 
     /**
@@ -67,14 +67,14 @@ class StateMutationType extends BaseEventEmitterController {
      * Set status and emit events
      */
     _setStatus(status, emitOptions = {}) {
-        if (!(status in StateMutationType.STATUSES))
+        if (!(status in StateControllerMutation.STATUSES))
             throw new Error("Invalid status");
 
         if (status !== this._status) {
             this._status = status;
             this.emit("status", this._status);
 
-            if(StateMutationType.closedStatus(this._status))
+            if(StateControllerMutation.closedStatus(this._status))
                 this.emit("close", this._status, emitOptions);
         }
     }
@@ -84,8 +84,8 @@ class StateMutationType extends BaseEventEmitterController {
      */
     static closedStatus(status) {
         return (
-            status === StateMutationType.STATUSES.ACCEPTED ||
-            status === StateMutationType.STATUSES.REJECTED
+            status === StateControllerMutation.STATUSES.ACCEPTED ||
+            status === StateControllerMutation.STATUSES.REJECTED
         );
     }
 
@@ -97,4 +97,4 @@ class StateMutationType extends BaseEventEmitterController {
     }
 }
 
-export default StateMutationType;
+export default StateControllerMutation;
